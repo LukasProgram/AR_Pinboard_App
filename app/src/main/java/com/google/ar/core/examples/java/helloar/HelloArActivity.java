@@ -109,6 +109,7 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             }
         });
 
+
         // Set up renderer.
         mSurfaceView.setPreserveEGLContextOnPause(true);
         mSurfaceView.setEGLContextClientVersion(2);
@@ -226,8 +227,9 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
 
         // Prepare the other rendering objects.
         try {
-            mVirtualObject.createOnGlThread(/*context=*/this, "andy.obj", "andy.png");
+            mVirtualObject.createOnGlThread(/*context=*/this, "pinboard5.obj", "6443928-large-corkboard-texture-or-background--Stock-Photo.jpg");
             mVirtualObject.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+
 
             mVirtualObjectShadow.createOnGlThread(/*context=*/this,
                 "andy_shadow.obj", "andy_shadow.png");
