@@ -18,6 +18,7 @@ package com.google.ar.core.examples.java.helloar;
 
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
+import android.opengl.Matrix;
 import android.os.Bundle;
 import android.support.design.widget.BaseTransientBottomBar;
 import android.support.design.widget.Snackbar;
@@ -35,6 +36,7 @@ import com.google.ar.core.Frame;
 import com.google.ar.core.HitResult;
 import com.google.ar.core.Plane;
 import com.google.ar.core.PointCloud;
+import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
 import com.google.ar.core.Trackable;
 import com.google.ar.core.Trackable.TrackingState;
@@ -48,6 +50,7 @@ import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -70,9 +73,15 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
 
     private final BackgroundRenderer mBackgroundRenderer = new BackgroundRenderer();
     private final ObjectRenderer mVirtualObject = new ObjectRenderer();
+    private final ObjectRenderer mVirtualFirstTile = new ObjectRenderer();
+    private final ObjectRenderer mVirtualSecondTile = new ObjectRenderer();
+
+
     private final ObjectRenderer mVirtualObjectShadow = new ObjectRenderer();
     private final PlaneRenderer mPlaneRenderer = new PlaneRenderer();
     private final PointCloudRenderer mPointCloud = new PointCloudRenderer();
+
+    private boolean isInitialPositionReceived = false;
 
     // Temporary matrix allocated here to reduce number of allocations for each frame.
     private final float[] mAnchorMatrix = new float[16];
@@ -147,6 +156,8 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             showSnackbarMessage("This device does not support AR", true);
         }
         mSession.configure(config);
+
+
     }
 
     @Override
@@ -230,6 +241,11 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             mVirtualObject.createOnGlThread(/*context=*/this, "pinboard5.obj", "6443928-large-corkboard-texture-or-background--Stock-Photo.jpg");
             mVirtualObject.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
 
+            mVirtualFirstTile.createOnGlThread(this, "newsTileNew.obj","newsTile.jpg");
+            mVirtualFirstTile.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+
+            mVirtualSecondTile.createOnGlThread(this, "funnyTileNew2.obj", "funnyTile.jpg");
+            mVirtualSecondTile.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
 
             mVirtualObjectShadow.createOnGlThread(/*context=*/this,
                 "andy_shadow.obj", "andy_shadow.png");
@@ -271,9 +287,12 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             Frame frame = mSession.update();
             Camera camera = frame.getCamera();
 
+
+
             // Handle taps. Handling only one tap per frame, as taps are usually low frequency
             // compared to frame rate.
             MotionEvent tap = mQueuedSingleTaps.poll();
+            /*
             if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
                 for (HitResult hit : frame.hitTest(tap)) {
                     // Check if any plane was hit, and if it was hit inside the plane polygon
@@ -295,7 +314,7 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
                         break;
                     }
                 }
-            }
+            } */
 
             // Draw background.
             mBackgroundRenderer.draw(frame);
@@ -316,6 +335,21 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             // Compute lighting from average intensity of the image.
             final float lightIntensity = frame.getLightEstimate().getPixelIntensity();
 
+            /*
+            Pose pose = frame.getCamera().getPose();
+            String X = Arrays.toString(pose.getXAxis());
+            String Y = Arrays.toString(pose.getYAxis());
+            String Z = Arrays.toString(pose.getZAxis());
+
+            Log.d("POSE", "X: "+X+" Y: "+Y+ " Z: "+Z);
+
+            Log.d("POSE", "X axis: "+X);
+
+            Log.d("POSE", " Y axis: "+Y);
+
+            Log.d("POSE", " Z axis: "+Z);
+
+            */
             // Visualize tracked points.
             PointCloud pointCloud = frame.acquirePointCloud();
             mPointCloud.update(pointCloud);
@@ -341,6 +375,13 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
                 mSession.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projmtx);
 
             // Visualize anchors created by touch.
+
+            if (!isInitialPositionReceived) {
+                Anchor fixAnchor = mSession.createAnchor(frame.getCamera().getPose());
+                mAnchors.add(fixAnchor);
+                isInitialPositionReceived = true;
+            }
+
             float scaleFactor = 1.0f;
             for (Anchor anchor : mAnchors) {
                 if (anchor.getTrackingState() != TrackingState.TRACKING) {
@@ -351,9 +392,14 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
                 anchor.getPose().toMatrix(mAnchorMatrix, 0);
 
                 // Update and draw the model and its shadow.
+
                 mVirtualObject.updateModelMatrix(mAnchorMatrix, scaleFactor);
+                mVirtualFirstTile.updateModelMatrix(mAnchorMatrix, scaleFactor);
+                mVirtualSecondTile.updateModelMatrix(mAnchorMatrix, scaleFactor);
                 mVirtualObjectShadow.updateModelMatrix(mAnchorMatrix, scaleFactor);
                 mVirtualObject.draw(viewmtx, projmtx, lightIntensity);
+                mVirtualFirstTile.draw(viewmtx, projmtx, lightIntensity);
+                mVirtualSecondTile.draw(viewmtx, projmtx, lightIntensity);
                 mVirtualObjectShadow.draw(viewmtx, projmtx, lightIntensity);
             }
 
