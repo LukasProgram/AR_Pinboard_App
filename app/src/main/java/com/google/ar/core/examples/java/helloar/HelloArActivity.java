@@ -16,8 +16,11 @@
 
 package com.google.ar.core.examples.java.helloar;
 
+import android.app.FragmentTransaction;
+import android.net.Uri;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
+import android.opengl.Matrix;
 import android.os.Bundle;
 import android.support.design.widget.BaseTransientBottomBar;
 import android.support.design.widget.Snackbar;
@@ -28,27 +31,29 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Toast;
+
 import com.google.ar.core.Anchor;
 import com.google.ar.core.Camera;
 import com.google.ar.core.Config;
 import com.google.ar.core.Frame;
-import com.google.ar.core.HitResult;
-import com.google.ar.core.Plane;
 import com.google.ar.core.PointCloud;
+import com.google.ar.core.Pose;
 import com.google.ar.core.Session;
-import com.google.ar.core.Trackable;
 import com.google.ar.core.Trackable.TrackingState;
+import com.google.ar.core.examples.java.helloar.content.FunnyTileFragment;
+import com.google.ar.core.examples.java.helloar.content.NewsTileFragment;
 import com.google.ar.core.examples.java.helloar.rendering.BackgroundRenderer;
 import com.google.ar.core.examples.java.helloar.rendering.ObjectRenderer;
-import com.google.ar.core.examples.java.helloar.rendering.ObjectRenderer.BlendMode;
 import com.google.ar.core.examples.java.helloar.rendering.PlaneRenderer;
 import com.google.ar.core.examples.java.helloar.rendering.PointCloudRenderer;
 import com.google.ar.core.exceptions.UnavailableApkTooOldException;
 import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
+
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
@@ -57,10 +62,8 @@ import javax.microedition.khronos.opengles.GL10;
  * ARCore API. The application will display any detected planes and will allow the user to tap on a
  * plane to place a 3d model of the Android robot.
  */
-public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.Renderer {
+public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.Renderer, NewsTileFragment.OnFragmentInteractionListener, FunnyTileFragment.OnFragmentInteractionListener {
     private static final String TAG = HelloArActivity.class.getSimpleName();
-
-    // Rendering. The Renderers are created here, and initialized when the GL surface is created.
     private GLSurfaceView mSurfaceView;
 
     private Session mSession;
@@ -70,16 +73,25 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
 
     private final BackgroundRenderer mBackgroundRenderer = new BackgroundRenderer();
     private final ObjectRenderer mVirtualObject = new ObjectRenderer();
-    private final ObjectRenderer mVirtualObjectShadow = new ObjectRenderer();
+    private final ObjectRenderer mVirtualFirstTile = new ObjectRenderer();
+    private final ObjectRenderer mVirtualSecondTile = new ObjectRenderer();
+
     private final PlaneRenderer mPlaneRenderer = new PlaneRenderer();
     private final PointCloudRenderer mPointCloud = new PointCloudRenderer();
 
-    // Temporary matrix allocated here to reduce number of allocations for each frame.
-    private final float[] mAnchorMatrix = new float[16];
+    private boolean isInitialPositionReceived = false;
 
-    // Tap handling and UI.
+    private final float[] mAnchorMatrix = new float[16];
+    private Anchor initialPinboardAnchor;
+
     private final ArrayBlockingQueue<MotionEvent> mQueuedSingleTaps = new ArrayBlockingQueue<>(16);
+    private ArrayBlockingQueue<MotionEvent> mQueuedLongPress = new ArrayBlockingQueue<>(16);
+
     private final ArrayList<Anchor> mAnchors = new ArrayList<>();
+
+    private int viewWidth = 0;
+    private int viewHeight = 0;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -97,6 +109,11 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             }
 
             @Override
+            public void onLongPress(MotionEvent e) {
+                mQueuedLongPress.offer(e);
+            }
+
+            @Override
             public boolean onDown(MotionEvent e) {
                 return true;
             }
@@ -108,6 +125,7 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
                 return mGestureDetector.onTouchEvent(event);
             }
         });
+
 
         // Set up renderer.
         mSurfaceView.setPreserveEGLContextOnPause(true);
@@ -146,6 +164,8 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             showSnackbarMessage("This device does not support AR", true);
         }
         mSession.configure(config);
+
+
     }
 
     @Override
@@ -156,10 +176,11 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
         // permission on Android M and above, now is a good time to ask the user for it.
         if (CameraPermissionHelper.hasCameraPermission(this)) {
             if (mSession != null) {
-                showLoadingMessage();
+               // showLoadingMessage();
                 // Note that order matters - see the note in onPause(), the reverse applies here.
                 mSession.resume();
             }
+            isInitialPositionReceived = false;
             mSurfaceView.onResume();
             mDisplayRotationHelper.onResume();
         } else {
@@ -175,6 +196,7 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
         // still call mSession.update() and get a SessionPausedException.
         mDisplayRotationHelper.onPause();
         mSurfaceView.onPause();
+        isInitialPositionReceived = false;
         if (mSession != null) {
             mSession.pause();
         }
@@ -226,13 +248,15 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
 
         // Prepare the other rendering objects.
         try {
-            mVirtualObject.createOnGlThread(/*context=*/this, "andy.obj", "andy.png");
+            mVirtualObject.createOnGlThread(/*context=*/this, "pinboard5.obj", "6443928-large-corkboard-texture-or-background--Stock-Photo.jpg");
             mVirtualObject.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
 
-            mVirtualObjectShadow.createOnGlThread(/*context=*/this,
-                "andy_shadow.obj", "andy_shadow.png");
-            mVirtualObjectShadow.setBlendMode(BlendMode.Shadow);
-            mVirtualObjectShadow.setMaterialProperties(1.0f, 0.0f, 0.0f, 1.0f);
+            mVirtualFirstTile.createOnGlThread(this, "newsTileNew.obj","newsTile.jpg");
+            mVirtualFirstTile.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+
+            mVirtualSecondTile.createOnGlThread(this, "funnyTileNew2.obj", "funnyTile.jpg");
+            mVirtualSecondTile.setMaterialProperties(0.0f, 3.5f, 1.0f, 6.0f);
+
         } catch (IOException e) {
             Log.e(TAG, "Failed to read obj file");
         }
@@ -248,6 +272,8 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
     public void onSurfaceChanged(GL10 gl, int width, int height) {
         mDisplayRotationHelper.onSurfaceChanged(width, height);
         GLES20.glViewport(0, 0, width, height);
+        viewWidth = width;
+        viewHeight = height;
     }
 
     @Override
@@ -262,6 +288,7 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
         // the video background can be properly adjusted.
         mDisplayRotationHelper.updateSessionIfNeeded(mSession);
 
+
         try {
             // Obtain the current frame from ARSession. When the configuration is set to
             // UpdateMode.BLOCKING (it is by default), this will throttle the rendering to the
@@ -272,30 +299,24 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             // Handle taps. Handling only one tap per frame, as taps are usually low frequency
             // compared to frame rate.
             MotionEvent tap = mQueuedSingleTaps.poll();
-            if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
-                for (HitResult hit : frame.hitTest(tap)) {
-                    // Check if any plane was hit, and if it was hit inside the plane polygon
-                    Trackable trackable = hit.getTrackable();
-                    if (trackable instanceof Plane
-                            && ((Plane) trackable).isPoseInPolygon(hit.getHitPose())) {
-                        // Cap the number of objects created. This avoids overloading both the
-                        // rendering system and ARCore.
-                        if (mAnchors.size() >= 20) {
-                            mAnchors.get(0).detach();
-                            mAnchors.remove(0);
-                        }
-                        // Adding an Anchor tells ARCore that it should track this position in
-                        // space. This anchor is created on the Plane to place the 3d model
-                        // in the correct position relative both to the world and to the plane.
-                        mAnchors.add(hit.createAnchor());
 
-                        // Hits are sorted by depth. Consider only closest hit on a plane.
-                        break;
-                    }
+
+            if (tap != null && camera.getTrackingState() == TrackingState.TRACKING) {
+                Log.d("Test1", "----------");
+
+                if (checkIfHit(mVirtualFirstTile,tap,1)) {
+                    NewsTileFragment fragment = NewsTileFragment.newInstance(null,null);
+                    FragmentTransaction transaction = getFragmentManager().beginTransaction();
+                    transaction.replace(R.id.surface_layout, fragment).addToBackStack(null);
+                    transaction.commit();
+
+                } else if (checkIfHit(mVirtualSecondTile,tap,2)){
+                    FunnyTileFragment fragment = FunnyTileFragment.newInstance(null,null);
+                    FragmentTransaction transaction = getFragmentManager().beginTransaction();
+                    transaction.replace(R.id.surface_layout, fragment).addToBackStack(null);
+                    transaction.commit();
                 }
             }
-
-            // Draw background.
             mBackgroundRenderer.draw(frame);
 
             // If not tracking, don't draw 3d objects.
@@ -319,26 +340,18 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
             mPointCloud.update(pointCloud);
             mPointCloud.draw(viewmtx, projmtx);
 
-            // Application is responsible for releasing the point cloud resources after
-            // using it.
             pointCloud.release();
 
-            // Check if we detected at least one plane. If so, hide the loading message.
-            if (mMessageSnackbar != null) {
-                for (Plane plane : mSession.getAllTrackables(Plane.class)) {
-                    if (plane.getType() == com.google.ar.core.Plane.Type.HORIZONTAL_UPWARD_FACING
-                            && plane.getTrackingState() == TrackingState.TRACKING) {
-                        hideLoadingMessage();
-                        break;
-                    }
-                }
+            if (!isInitialPositionReceived && initialPinboardAnchor == null) {
+                Anchor fixAnchor = mSession.createAnchor(
+                        frame.getCamera().getPose()
+                                .compose(Pose.makeTranslation(0,0,-1.5f))
+                                .extractTranslation());
+                mAnchors.add(fixAnchor);
+                initialPinboardAnchor = fixAnchor;
+                isInitialPositionReceived = true;
             }
 
-            // Visualize planes.
-            mPlaneRenderer.drawPlanes(
-                mSession.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projmtx);
-
-            // Visualize anchors created by touch.
             float scaleFactor = 1.0f;
             for (Anchor anchor : mAnchors) {
                 if (anchor.getTrackingState() != TrackingState.TRACKING) {
@@ -349,10 +362,13 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
                 anchor.getPose().toMatrix(mAnchorMatrix, 0);
 
                 // Update and draw the model and its shadow.
+
                 mVirtualObject.updateModelMatrix(mAnchorMatrix, scaleFactor);
-                mVirtualObjectShadow.updateModelMatrix(mAnchorMatrix, scaleFactor);
+                mVirtualFirstTile.updateModelMatrix(mAnchorMatrix, scaleFactor);
+                mVirtualSecondTile.updateModelMatrix(mAnchorMatrix, scaleFactor);
                 mVirtualObject.draw(viewmtx, projmtx, lightIntensity);
-                mVirtualObjectShadow.draw(viewmtx, projmtx, lightIntensity);
+                mVirtualFirstTile.draw(viewmtx, projmtx, lightIntensity);
+                mVirtualSecondTile.draw(viewmtx, projmtx, lightIntensity);
             }
 
         } catch (Throwable t) {
@@ -387,24 +403,213 @@ public class HelloArActivity extends AppCompatActivity implements GLSurfaceView.
         mMessageSnackbar.show();
     }
 
-    private void showLoadingMessage() {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                showSnackbarMessage("Searching for surfaces...", false);
+    private Boolean checkIfHit(ObjectRenderer renderer, MotionEvent event, final int cubeIndex){
+        if(isMVPMatrixHitMotionEvent2(renderer,event)) {
+            // long press hit a tile, show content menu for the tile
+            Log.d("Test1", "TILE: " + cubeIndex + " HIT <3");
+
+            final String tileIndex = "" + cubeIndex;
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(getApplicationContext(), tileIndex, Toast.LENGTH_SHORT).show();
+                }
+            });
+            return true;
+       } else {
+            final String tileIndex = "" + cubeIndex;
+            Log.d("Test1", "TILE: " + tileIndex + " NOT HIT");
+            return false;
+        }
+
+    }
+    private boolean isMVPMatrixHitMotionEvent2(ObjectRenderer object, MotionEvent event){
+
+        float[] mvpMatrix = object.getmModelViewProjectionMatrix();
+
+        Log.d("Test", "------START COMPARING------");
+        Log.d("Test", "MVP Matrix: " + mvpMatrix.toString());
+
+        for (int i = 0; i < object.triangles.size(); i++)
+        {
+            ObjectRenderer.Triangle triangle = object.triangles.get(i);
+
+            float[] point1 = new float[4];
+            float[] point2 = new float[4];
+            float[] point3 = new float[4];
+
+            point1[0] = triangle.vertex1[0];
+            point1[1] = triangle.vertex1[1];
+            point1[2] = triangle.vertex1[2];
+            point1[3] = 0;
+
+            point2[0] = triangle.vertex2[0];
+            point2[1] = triangle.vertex2[1];
+            point2[2] = triangle.vertex2[2];
+            point2[3] = 0;
+
+            point3[0] = triangle.vertex3[0];
+            point3[1] = triangle.vertex3[1];
+            point3[2] = triangle.vertex3[2];
+            point3[3] = 0;
+
+            Log.d("Test", "Point1: " + point1[0] + " " + point1[1]+ " " + point1[2]+ " " + point1[3]);
+            Log.d("Test", "Point2: " + point2[0] + " " + point2[1]+ " " + point2[2]+ " " + point2[3]);
+            Log.d("Test", "Point3: " + point3[0] + " " + point3[1]+ " " + point3[2]+ " " + point3[3]);
+
+            float[] calculatedPoint1 = new float[4];
+            float[] calculatedPoint2 = new float[4];
+            float[] calculatedPoint3 = new float[4];
+
+            Matrix.multiplyMV(calculatedPoint1, 0, mvpMatrix, 0, point1, 0);
+            Matrix.multiplyMV(calculatedPoint2, 0, mvpMatrix, 0, point2, 0);
+            Matrix.multiplyMV(calculatedPoint3, 0, mvpMatrix, 0, point3, 0);
+
+            float[] point12D = {calculatedPoint1[0], calculatedPoint1[1]};
+            float[] point22D = {calculatedPoint2[0], calculatedPoint2[1]};
+            float[] point32D = {calculatedPoint3[0], calculatedPoint3[1]};
+
+            Log.d("Test", "Point12D: " + point12D[0] + " " + point12D[1]);
+            Log.d("Test", "Point22D: " + point22D[0] + " " + point22D[1]);
+            Log.d("Test", "Point32D: " + point32D[0] + " " + point32D[1]);
+
+            // Get Touchposition
+            float[] touchPosition = {event.getX(), event.getY()};
+            float[] convertedTouchPosition = convertToFrame(touchPosition, mSurfaceView.getWidth(), mSurfaceView.getHeight());
+
+            Log.d("Test", "ConvertedTouch: " + convertedTouchPosition[0] + " " + convertedTouchPosition[1]);
+
+            boolean b1,b2,b3;
+
+            b1 = sign(convertedTouchPosition, point12D, point22D) < 0.0f;
+            b2 = sign(convertedTouchPosition, point22D, point32D) < 0.0f;
+            b3 = sign(convertedTouchPosition, point32D, point12D) < 0.0f;
+
+            Log.d("Test", "b1: " + b1);
+            Log.d("Test", "b2: " + b2);
+            Log.d("Test", "b3: " + b3);
+
+            Log.d("Test", "------END COMPARING------");
+
+            if ((b1 == b2) && (b2 == b3)) {
+                Log.d("Test", "TOTAL   ---> TRUE");
+                return true;
+            } else {
+                Log.d("Test", "TOTAL  ---> FALSE");
             }
-        });
+        }
+
+        return false;
     }
 
-    private void hideLoadingMessage() {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if (mMessageSnackbar != null) {
-                    mMessageSnackbar.dismiss();
-                }
-                mMessageSnackbar = null;
+    public float sign(float[] point1, float[] point2, float[] point3) {
+        return (point1[0] - point3[0]) * (point2[1] - point3[1]) - (point2[0] - point3[0]) * (point1[1] - point3[1]);
+    }
+
+    private boolean isMVPMatrixHitMotionEvent(ObjectRenderer object, MotionEvent event){
+
+        float[] mvpMatrix = object.getmModelViewProjectionMatrix();
+
+        Log.d("Test", "------START COMPARING------");
+        Log.d("Test", "MVP Matrix: " + mvpMatrix.toString());
+
+        for (int i = 0; i < object.triangles.size(); i++)
+        {
+            ObjectRenderer.Triangle triangle = object.triangles.get(i);
+
+            float[] point1 = new float[4];
+            float[] point2 = new float[4];
+            float[] point3 = new float[4];
+
+            point1[0] = triangle.vertex1[0];
+            point1[1] = triangle.vertex1[1];
+            point1[2] = triangle.vertex1[2];
+            point1[3] = 0;
+
+            point2[0] = triangle.vertex2[0];
+            point2[1] = triangle.vertex2[1];
+            point2[2] = triangle.vertex2[2];
+            point2[3] = 0;
+
+            point3[0] = triangle.vertex3[0];
+            point3[1] = triangle.vertex3[1];
+            point3[2] = triangle.vertex3[2];
+            point3[3] = 0;
+
+            Log.d("Test", "Point1: " + point1[0] + " " + point1[1]+ " " + point1[2]+ " " + point1[3]);
+            Log.d("Test", "Point2: " + point2[0] + " " + point2[1]+ " " + point2[2]+ " " + point2[3]);
+            Log.d("Test", "Point3: " + point3[0] + " " + point3[1]+ " " + point3[2]+ " " + point3[3]);
+
+            float[] calculatedPoint1 = new float[4];
+            float[] calculatedPoint2 = new float[4];
+            float[] calculatedPoint3 = new float[4];
+
+            Matrix.multiplyMV(calculatedPoint1, 0, mvpMatrix, 0, point1, 0);
+            Matrix.multiplyMV(calculatedPoint2, 0, mvpMatrix, 0, point2, 0);
+            Matrix.multiplyMV(calculatedPoint3, 0, mvpMatrix, 0, point3, 0);
+
+            float[] point12D = {calculatedPoint1[0], calculatedPoint1[1]};
+            float[] point22D = {calculatedPoint2[0], calculatedPoint2[1]};
+            float[] point32D = {calculatedPoint3[0], calculatedPoint3[1]};
+
+            Log.d("Test", "Point12D: " + point12D[0] + " " + point12D[1]);
+            Log.d("Test", "Point22D: " + point22D[0] + " " + point22D[1]);
+            Log.d("Test", "Point32D: " + point32D[0] + " " + point32D[1]);
+
+            // Get Touchposition
+            float[] touchPosition = {event.getX(), event.getY()};
+            float[] convertedTouchPosition = convertToFrame(touchPosition, mSurfaceView.getWidth(), mSurfaceView.getHeight());
+
+            Log.d("Test", "ConvertedTouch: " + convertedTouchPosition[0] + " " + convertedTouchPosition[1]);
+
+            float totalArea = calcTriangleArea(point12D, point22D, point32D);
+
+            float area1 = calcTriangleArea(convertedTouchPosition, point22D, point32D);
+            float area2 = calcTriangleArea(convertedTouchPosition, point12D, point32D);
+            float area3 = calcTriangleArea(convertedTouchPosition, point12D, point22D);
+
+            Log.d("Test", "TotalArea: " + totalArea);
+            Log.d("Test", "area1: " + area1);
+            Log.d("Test", "area2: " + area2);
+            Log.d("Test", "area3: " + area3);
+
+            Log.d("Test", "------END COMPARING------");
+
+            if ((area1 + area2 + area3) <= totalArea) {
+                Log.d("Test", "TOTAL AREA  ---> TRUE");
+                return true;
+            } else {
+                Log.d("Test", "TOTAL AREA ---> FALSE");
+
             }
-        });
+
+        }
+
+        return false;
+    }
+
+    float calcTriangleArea(float[] point1, float[] point2, float[] point3) {
+        float det = 0;
+        det = (((point1[0] + 5.f) - (point3[0] + 5.f)) * ((point2[1] + 5.f) - (point3[1] + 5.f))) - (((point2[0] + 5.f) - (point3[0] + 5.f)) * ((point1[1] + 5.f) - (point3[1] + 5.f)));
+        return (det / 2.0f);
+    }
+    float calcTriangleAreaGeneral(float[] point1, float[] point2, float[] point3) {
+        float det = 0;
+        det = ((point1[0] - point3[0]) * (point2[1] - point3[1])) - ((point2[0] - point3[0]) * (point1[1] - point3[1]));
+        return (det / 2.0f);
+    }
+
+    float[] convertToFrame(float[] touchPositon, float width, float height) {
+        float[] result = new float[2];
+
+        result[0] = (touchPositon[0] / (width / 2.f)) - 1.f;
+        result[1] = ((touchPositon[1] / (height / 2.0f)) - 1.f) * -1.f;
+
+        return result;
+    }
+
+    @Override
+    public void onFragmentInteraction(Uri uri) {
+
     }
 }
