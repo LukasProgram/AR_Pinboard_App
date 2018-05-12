@@ -20,11 +20,9 @@ import android.graphics.BitmapFactory;
 import android.opengl.GLES20;
 import android.opengl.GLUtils;
 import android.opengl.Matrix;
+
 import com.google.ar.core.examples.java.helloar.R;
-import de.javagl.obj.Obj;
-import de.javagl.obj.ObjData;
-import de.javagl.obj.ObjReader;
-import de.javagl.obj.ObjUtils;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -32,6 +30,12 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
+import java.util.ArrayList;
+
+import de.javagl.obj.Obj;
+import de.javagl.obj.ObjData;
+import de.javagl.obj.ObjReader;
+import de.javagl.obj.ObjUtils;
 
 /**
  * Renders an object loaded from an OBJ file in OpenGL.
@@ -50,6 +54,14 @@ public class ObjectRenderer {
         /** Normal alpha blending. */
         Grid
     }
+
+    public class Triangle {
+        public float[] vertex1 = new float[3];
+        public float[] vertex2 = new float[3];
+        public float[] vertex3 = new float[3];
+    }
+
+    public ArrayList<Triangle> triangles = new ArrayList<>();
 
     private static final int COORDS_PER_VERTEX = 3;
 
@@ -91,6 +103,7 @@ public class ObjectRenderer {
     // Temporary matrices allocated here to reduce number of allocations for each frame.
     private float[] mModelMatrix = new float[16];
     private float[] mModelViewMatrix = new float[16];
+
     private float[] mModelViewProjectionMatrix = new float[16];
 
     // Set some default material properties to use for lighting.
@@ -98,6 +111,10 @@ public class ObjectRenderer {
     private float mDiffuse = 1.0f;
     private float mSpecular = 1.0f;
     private float mSpecularPower = 6.0f;
+
+    public float[] getmModelViewProjectionMatrix() {
+        return mModelViewProjectionMatrix;
+    }
 
     public ObjectRenderer() {
     }
@@ -151,6 +168,27 @@ public class ObjectRenderer {
         FloatBuffer vertices = ObjData.getVertices(obj);
         FloatBuffer texCoords = ObjData.getTexCoords(obj, 2);
         FloatBuffer normals = ObjData.getNormals(obj);
+
+        for (int i = 0; i < wideIndices.limit(); i += 3) {
+            int index1 = wideIndices.get(i);
+            int index2 = wideIndices.get(i + 1);
+            int index3 = wideIndices.get(i + 2);
+
+            Triangle triangle = new Triangle();
+            triangle.vertex1[0] = vertices.get(index1);
+            triangle.vertex1[1] = vertices.get(index1 + 1);
+            triangle.vertex1[2] = vertices.get(index1 + 2);
+
+            triangle.vertex2[0] = vertices.get(index2);
+            triangle.vertex2[1] = vertices.get(index2 + 1);
+            triangle.vertex2[2] = vertices.get(index2 + 2);
+
+            triangle.vertex3[0] = vertices.get(index3);
+            triangle.vertex3[1] = vertices.get(index3 + 1);
+            triangle.vertex3[2] = vertices.get(index3 + 2);
+
+            triangles.add(triangle);
+        }
 
         // Convert int indices to shorts for GL ES 2.0 compatibility
         ShortBuffer indices = ByteBuffer.allocateDirect(2 * wideIndices.limit())

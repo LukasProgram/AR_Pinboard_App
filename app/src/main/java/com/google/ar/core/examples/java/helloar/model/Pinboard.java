@@ -28,8 +28,10 @@ public class Pinboard {
     private ObjectRenderer virtualObject;
 
 
-    public Pinboard(@NonNull final String name, @NonNull final String qrCode,
-                    @Nullable final PinboardLocation pinboardLocation, @Nullable final List<PinboardTiles> pinboardTilesiList) {
+    public Pinboard(@NonNull final String name,
+                    @NonNull final String qrCode,
+                    @Nullable final PinboardLocation pinboardLocation,
+                    @Nullable final List<PinboardTiles> pinboardTilesiList) {
         this.name = name;
         this.qrCode = qrCode;
         this.pinboardLocation = pinboardLocation;

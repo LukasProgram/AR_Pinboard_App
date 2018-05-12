@@ -34,11 +34,7 @@ public class DisplayRotationHelper implements DisplayListener {
     private final Context mContext;
     private final Display mDisplay;
 
-    /**
-     * Constructs the DisplayRotationHelper but does not register the listener yet.
-     *
-     * @param context the Android {@link Context}.
-     */
+
     public DisplayRotationHelper(Context context) {
         mContext = context;
         mDisplay = context.getSystemService(WindowManager.class).getDefaultDisplay();

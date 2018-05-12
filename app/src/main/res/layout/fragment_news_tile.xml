@@ -1,0 +1,83 @@
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.google.ar.core.examples.java.helloar.content.NewsTileFragment"
+    android:background="@color/white_opacity_60"
+   >
+<ScrollView
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <android.support.constraint.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+    <ImageView
+        android:id="@+id/imageView_tile_picture"
+        android:layout_width="326dp"
+        android:layout_height="248dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="15dp"
+        android:src="@drawable/bitcoin"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textView_tile_category_label" />
+
+    <TextView
+        android:id="@+id/textView_tile_category_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="NEWS   TILE"
+        android:typeface="serif"
+        android:padding="8dp"
+        android:gravity="center"
+        android:textStyle="bold"
+        android:background="@color/black_opacity_60"
+        android:textColor="@color/white"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/textView_news_title"
+        android:layout_width="wrap_content"
+        android:layout_height="20dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginStart="8dp"
+        android:gravity="center"
+        android:text="Quarter Million Dollars"
+        android:textStyle="bold"
+        android:textColor="@color/black"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/imageView_tile_picture"
+        app:layout_constraintTop_toTopOf="@+id/imageView_tile_picture" />
+
+        <TextView
+            android:id="@+id/textView_news_description"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="15dp"
+            android:text="Bitcoin Cash (BCH) is on a roll lately, scoring new mainstream adoption platforms in countries like the United States. But it’s still a relatively small player within the ecosystem, relative to Bitcoin Core (BTC) for example. For these reasons and more, BCH enthusiasts are participating in a 48 hour matching donation challenge, hoping to assist the nonprofit Fund in its mission to help bring the digital currency to one billion people in five years."
+            android:textColor="@color/black"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/imageView_tile_picture"
+            app:layout_constraintTop_toBottomOf="@+id/textView_news_title" />
+
+        <TextView
+            android:id="@+id/textView"
+            android:layout_width="0dp"
+            android:layout_height="287dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:text="Late Friday night, BCH enthusiast @jarenfeser posted to the popular subreddit /r/btc, a popular and uncensored forum. The thread immediately turned into a challenge. “Over the next 48 hours I will match all donations made to The Bitcoin Cash Fund (up to 300 BCH),” he wrote. The Bitcoin Cash Fund describes itself as “A community-driven, grassroots project to accelerate the adoption of Bitcoin Cash.” Bitcoin Cash, of course, forked from Bitcoin Core in August of last year in response to increasing transaction fees and mempool congestion causing long wait times plaguing bitcoin core. Since its inception, BCH has, in only a few months, stubbornly remained in the top four cryptocurrencies by market capitalization, including a brief stint as number 2, usurping ethereum. These are heady times for BCH, as News.Bitcoin.com reported popular bitcoin payment provider Bitpay added BCH to its Visa debit card program for United States residents. And this was after a slew of other adoption news, such as bitcoin cash tip bots for Telegram and even new ATMs for the decentralized cryptocurrency. Because BCH wasn’t created by a government nor corporation, an organic non-profit fund was set up to assist in its adoption growth. “Currently, we are looking to promote any non-profit project that will help promote the adoption of Bitcoin Cash. Examples of projects we’re funding now are Bitcoin Cash video tutorials,” the fund explains, “a BCH-specific JavaScript library, and an info pack to help businesses adopt BCH. We’ve previously funded the incredible TX Highway, as well as Bitcoin Cash meetups all over the world.” BCH supporters are encouraged to submit adoption ideas."
+            android:textColor="@color/black"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/imageView_tile_picture" />
+        </android.support.constraint.ConstraintLayout>
+    </ScrollView>
+</android.support.constraint.ConstraintLayout>
